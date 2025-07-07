@@ -1,27 +1,21 @@
-# ─── Build Stage ───────────────────────────────────────────
-FROM node:18-alpine AS builder
+# ─── Base (node + dependências) ─────────────────────────────
+ARG BASE=node:20.18.0
+FROM ${BASE} AS base
 WORKDIR /app
-
-# copie só o package.json e pnpm-lock e instale
-COPY package*.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml ./
 RUN npm install -g pnpm && pnpm install
-
-# copie o resto e faça o build
 COPY . .
+
+# ─── Build (remix + vite build) ────────────────────────────
+FROM base AS bolt-ai-production
+# build dentro do container:
 RUN pnpm run build
 
-# ─── Runtime Stage ─────────────────────────────────────────
-FROM node:18-alpine
+# ─── Runtime (executa dockerstart) ─────────────────────────
+FROM base AS bolt-ai-runtime
 WORKDIR /app
-
-# instala o 'serve' para servir estáticos
-RUN npm install -g serve
-
-# copie só o resultado do build
-COPY --from=builder /app/dist ./dist
-
-# exponha a porta que vamos usar
+COPY --from=bolt-ai-production /app .
+# Porta que o boltstart escuta:
 EXPOSE 5173
-
-# comando para rodar em produção
-CMD ["serve", "-s", "dist", "-l", "5173"]
+# Comando oficial de produção:
+CMD ["pnpm", "run", "dockerstart"]
